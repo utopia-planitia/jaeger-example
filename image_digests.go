@@ -1,42 +1,61 @@
 package exocomp
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/genuinetools/reg/registry"
 	"github.com/genuinetools/reg/repoutils"
-
-	//"github.com/moby/buildkit/frontend/dockerfile/parser"
-	"github.com/moby/buildkit/frontend/dockerfile/parser"
-	//"github.com/docker/docker/builder/dockerfile/parser"
 )
+
+type line struct {
+	offset  int
+	content string
+}
+
+const fileWithImages = `^(Dockerfile|.*\.ya?ml)$`
+const linesFrom = `^FROM ([^\s]*)`
 
 func ImageDigests(repoPath string) error {
 
-	files, err := findFiles(repoPath, "Dockerfile")
+	var filesFilter = regexp.MustCompile(fileWithImages)
+	var fromFilter = regexp.MustCompile(linesFrom)
+
+	files, err := findFiles(repoPath, filesFilter)
 	if err != nil {
 		return fmt.Errorf("failed to search Dockerfiles: %s", err)
 	}
 
 	for _, file := range files {
 		fmt.Println(file)
-		ParseFile(file)
+
+		f, err := os.Open(file)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		_, err = findLines(f, fromFilter)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-func findFiles(root, fileName string) ([]string, error) {
+func findFiles(root string, filter *regexp.Regexp) ([]string, error) {
 	var files []string
 
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if info.Name() == fileName {
+		if filter.MatchString(info.Name()) {
 			files = append(files, path)
 		}
 		return err
@@ -45,44 +64,27 @@ func findFiles(root, fileName string) ([]string, error) {
 	return files, err
 }
 
-// Parse a Dockerfile from a filename.  An IOError or ParseError may occur.
-func ParseFile(filename string) error {
-	file, err := os.Open(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
+func findLines(r io.Reader, reg *regexp.Regexp) ([]line, error) {
 
-	return ParseReader(file)
-}
+	ll := []line{}
 
-// Parse a Dockerfile from a reader.  A ParseError may occur.
-func ParseReader(file io.Reader) error {
-
-	res, err := parser.Parse(file)
-	if err != nil {
-		return err
-	}
-
-	for _, child := range res.AST.Children {
-
-		if child.Value == "from" {
-			fmt.Println(child.StartLine)
-			fmt.Println(child.Original)
-			img := strings.Split(child.Original, " ")[1]
-			err := digest(img)
-			if err != nil {
-				return err
-			}
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		t := scanner.Text()
+		if !reg.MatchString(t) {
+			continue
 		}
-
-		// Only happens for ONBUILD
-		if child.Next != nil && len(child.Next.Children) > 0 {
-			child = child.Next.Children[0]
-		}
-
+		fmt.Println(t)
+		m := reg.FindStringSubmatch(t)
+		fmt.Println(m[1])
+		digest(m[1])
 	}
-	return nil
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return ll, nil
 }
 
 func digest(img string) error {
