@@ -18,6 +18,13 @@ func jaeger() func(h http.Handler) http.Handler {
 			opentracing.SetGlobalTracer(tracer)
 
 			span := tracer.StartSpan("say-hello")
+
+			requestID, ok := r.Context().Value(requestIDKey).(string)
+			if !ok {
+				requestID = "unknown"
+			}
+			span.SetTag("requestID", requestID)
+
 			//			span.SetTag("hello-to", helloTo)
 			defer span.Finish()
 

@@ -42,8 +42,8 @@ func Run(listen string, log2 *logrus.Logger, routes *http.ServeMux) {
 
 	handler = logAccess(log2)(handler)
 	handler = logDelay(log2, 200*time.Microsecond, 150*time.Microsecond, 100*time.Microsecond)(handler)
-	handler = requestID(rand.Int63)(handler)
 	handler = jaeger()(handler)
+	handler = requestID(rand.Int63)(handler)
 
 	server := &http.Server{
 		Addr:         listen,
