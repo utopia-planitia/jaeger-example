@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"github.com/sirupsen/logrus"
 	"log"
 	"math/rand"
 	"net/http"
@@ -12,17 +13,36 @@ import (
 	"time"
 )
 
-func Run(listen string, logger *log.Logger, routes *http.ServeMux) {
+// log2LogrusWriter exploits the documented fact that the standard
+// log pkg sends each log entry as a single io.Writer.Write call:
+// https://golang.org/pkg/log/#Logger
+// https://github.com/sirupsen/logrus/issues/436
+type log2LogrusWriter struct {
+	f func(args ...interface{})
+}
+
+func (w *log2LogrusWriter) Write(b []byte) (int, error) {
+	n := len(b)
+	if n > 0 && b[n-1] == '\n' {
+		b = b[:n-1]
+	}
+	w.f(string(b))
+	return n, nil
+}
+
+func Run(listen string, log2 *logrus.Logger, routes *http.ServeMux) {
 
 	running := int32(0)
 
+	logger := log.New(&log2LogrusWriter{f: log2.Warn}, "", 0)
+
 	routes.Handle("/healthz", healthz(&running))
 
-	access := logAccess(logger)(routes)
-	delay := logDelay(logger)(access)
-	requestID := requestID(rand.Int63)(delay)
+	handler := http.Handler(routes)
 
-	handler := requestID
+	handler = logAccess(log2)(handler)
+	handler = logDelay(log2, 200*time.Microsecond, 150*time.Microsecond, 100*time.Microsecond)(handler)
+	handler = requestID(rand.Int63)(handler)
 
 	server := &http.Server{
 		Addr:         listen,

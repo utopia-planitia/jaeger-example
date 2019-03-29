@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"log"
+	log "github.com/sirupsen/logrus"
 	"net/http"
 )
 
@@ -12,7 +12,13 @@ func logAccess(l *log.Logger) func(h http.Handler) http.Handler {
 			if !ok {
 				requestID = "unknown"
 			}
-			l.Println(requestID, r.Method, r.URL.Path, r.RemoteAddr, r.UserAgent())
+			l.WithFields(log.Fields{
+				"requestID": requestID,
+				"method":    r.Method,
+				"path":      r.URL.Path,
+				"remote":    r.RemoteAddr,
+				"userAgent": r.UserAgent(),
+			}).Info("accessed")
 
 			h.ServeHTTP(w, r)
 		})

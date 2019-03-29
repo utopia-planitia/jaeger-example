@@ -18,7 +18,9 @@ func requestID(randInt63 func() int64) func(h http.Handler) http.Handler {
 				ID = randString(randInt63, 32)
 			}
 
+			r.Header.Set("X-Request-Id", ID)
 			w.Header().Set("X-Request-Id", ID)
+
 			ctx := context.WithValue(r.Context(), requestIDKey, ID)
 			r = r.WithContext(ctx)
 

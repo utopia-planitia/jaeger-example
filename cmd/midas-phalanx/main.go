@@ -10,55 +10,51 @@ import (
 	"os"
 	"time"
 
-	"log"
-
 	"github.com/sirupsen/logrus"
 	"github.com/utopia-planitia/exocomp/middleware"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 var (
-	Version      string = ""
-	GitTag       string = ""
-	GitCommit    string = ""
-	GitTreeState string = ""
-	listen       string
-	healthy      int32
+	GitTag    string = ""
+	GitCommit string = ""
+	listen    string
 )
 
 func main() {
 	flag.StringVar(&listen, "listen", ":8080", "address to listen on")
 	flag.Parse()
 
-	// https://github.com/sirupsen/logrus/issues/436
-	//	loggerOrg := log.New(os.Stdout, "http: ", log.LstdFlags)
-	loggerOrg := log.New(os.Stderr, "", log.LstdFlags)
 	logger := logrus.New()
-	loggerOrg.SetOutput(logger.Writer())
 
-	//	logger.Formatter = new(logrus.JSONFormatter)
-	logger.Formatter = new(logrus.TextFormatter)                     //default
-	logger.Formatter.(*logrus.TextFormatter).DisableColors = true    // remove colors
-	logger.Formatter.(*logrus.TextFormatter).DisableTimestamp = true // remove timestamp from test output
-	logger.Level = logrus.TraceLevel
-	logger.Out = os.Stdout
+	if os.Getenv("LOG_TEXT") == "true" || terminal.IsTerminal(int(os.Stdout.Fd())) {
+		logger.Formatter = &logrus.TextFormatter{ForceColors: os.Getenv("LOG_COLORS") != "false"}
+	} else {
+		logger.Formatter = &logrus.JSONFormatter{}
+	}
+	if os.Getenv("LOG_LEVEL") == "trace" {
+		logger.Level = logrus.TraceLevel
+	}
+	if os.Getenv("LOG_LEVEL") == "info" {
+		logger.Level = logrus.InfoLevel
+	}
+	if os.Getenv("LOG_LEVEL") == "warn" {
+		logger.Level = logrus.WarnLevel
+	}
 
-	logger.Println("Simple go server")
-	logger.Println("Version:", Version)
-	logger.Println("GitTag:", GitTag)
-	logger.Println("GitCommit:", GitCommit)
-	logger.Println("GitTreeState:", GitTreeState)
+	if GitTag != "" {
+		logger.Println("GitTag:", GitTag)
+	}
+	if GitCommit != "" {
+		logger.Println("GitCommit:", GitCommit)
+	}
 
-	logger.Println("Server is starting...")
+	logger.Println("server is starting...")
 
 	router := http.NewServeMux()
 	router.Handle("/", index())
 
-	middleware.Run(listen, loggerOrg, router)
-
-	os.Stderr.Sync()
-	os.Stdout.Sync()
-	//	log.Printf("main exit\n")
-	//	time.Sleep(2 * time.Second)
+	middleware.Run(listen, logger, router)
 }
 
 func index() http.Handler {
@@ -68,11 +64,11 @@ func index() http.Handler {
 			return
 		}
 
-		time.Sleep(2 * time.Second)
+		time.Sleep(0 * time.Second)
 
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "Hello, World!")
+		fmt.Fprintln(w, "Hello, world!")
 	})
 }
