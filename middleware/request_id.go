@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"github.com/opentracing/opentracing-go"
 	"net/http"
 	"unsafe"
 )
@@ -13,6 +14,8 @@ const requestIDKey = contextKey("requestId")
 func requestID(randInt63 func() int64) func(h http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			span, _ := opentracing.StartSpanFromContext(r.Context(), "requestID")
+
 			ID := r.Header.Get("X-Request-Id")
 			if ID == "" {
 				ID = randString(randInt63, 32)
@@ -23,6 +26,8 @@ func requestID(randInt63 func() int64) func(h http.Handler) http.Handler {
 
 			ctx := context.WithValue(r.Context(), requestIDKey, ID)
 			r = r.WithContext(ctx)
+
+			span.Finish()
 
 			h.ServeHTTP(w, r)
 		})

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"github.com/opentracing/opentracing-go"
 	log "github.com/sirupsen/logrus"
 	"net/http"
 )
@@ -8,6 +9,8 @@ import (
 func logAccess(l *log.Logger) func(h http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			span, _ := opentracing.StartSpanFromContext(r.Context(), "logAccess")
+
 			requestID, ok := r.Context().Value(requestIDKey).(string)
 			if !ok {
 				requestID = "unknown"
@@ -19,6 +22,8 @@ func logAccess(l *log.Logger) func(h http.Handler) http.Handler {
 				"remote":    r.RemoteAddr,
 				"userAgent": r.UserAgent(),
 			}).Info("accessed")
+
+			span.Finish()
 
 			h.ServeHTTP(w, r)
 		})

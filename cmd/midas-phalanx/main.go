@@ -10,6 +10,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/log"
 	"github.com/sirupsen/logrus"
 	"github.com/utopia-planitia/exocomp/middleware"
 	"golang.org/x/crypto/ssh/terminal"
@@ -59,12 +61,33 @@ func main() {
 
 func index() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		ctx := r.Context()
+
+		span, ctx := opentracing.StartSpanFromContext(ctx, "formatString")
+		defer span.Finish()
+
+		helloTo := "david"
+
+		span.SetTag("hello-to", helloTo)
+
+		helloStr := fmt.Sprintf("Hello, %s!", helloTo)
+		span.LogFields(
+			log.String("event", "string-format"),
+			log.String("value", helloStr),
+		)
+
+		println(helloStr)
+		span.LogKV("event", "println")
+
 		if r.URL.Path != "/" {
 			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 			return
 		}
 
+		fakeWorkSpan, ctx := opentracing.StartSpanFromContext(ctx, "some work")
 		time.Sleep(0 * time.Second)
+		fakeWorkSpan.Finish()
 
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
